@@ -1,0 +1,7 @@
+spring:
+  jpa:
+    show-sql: true
+logging:
+  level:
+    com.cliniq: DEBUG
+    org.springframework.security: DEBUG

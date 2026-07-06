@@ -1,0 +1,7 @@
+spring:
+  flyway:
+    enabled: true
+  jpa:
+    show-sql: false
+  cache:
+    type: simple

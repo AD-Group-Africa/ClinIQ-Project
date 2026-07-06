@@ -1,0 +1,81 @@
+spring:
+  application:
+    name: cliniq-backend
+  datasource:
+    url:      ${DATABASE_URL:jdbc:postgresql://localhost:5432/cliniq}
+    username: ${DATABASE_USER:cliniq}
+    password: ${DATABASE_PASSWORD:cliniq_dev_password}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+      connection-timeout: 30000
+      pool-name: ClinIQ-Pool
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    open-in-view: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        jdbc.batch_size: 50
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    validate-on-migrate: true
+  data:
+    redis:
+      host:     ${REDIS_HOST:localhost}
+      port:     ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:redis_dev_password}
+      timeout:  5000ms
+  cache:
+    type: redis
+
+jwt:
+  secret:                ${JWT_SECRET:cliniq_jwt_secret_minimum_64_chars_long_change_in_production_now}
+  expiration-ms:         900000
+  refresh-expiration-ms: 604800000
+
+africa-talking:
+  api-key:  ${AT_API_KEY:}
+  username: ${AT_USERNAME:sandbox}
+
+mpesa:
+  consumer-key:    ${MPESA_CONSUMER_KEY:}
+  consumer-secret: ${MPESA_CONSUMER_SECRET:}
+  shortcode:       ${MPESA_SHORTCODE:174379}
+  passkey:         ${MPESA_PASSKEY:}
+  callback-url:    ${MPESA_CALLBACK_URL:http://localhost:8080/api/v1/billing/mpesa/callback}
+  sandbox:         ${MPESA_SANDBOX:true}
+
+app:
+  frontend-url: ${FRONTEND_URL:http://localhost:3000}
+
+server:
+  port: 8080
+  error:
+    include-message: never
+    include-stacktrace: never
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: always
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+  api-docs:
+    path: /v3/api-docs
+
+logging:
+  level:
+    com.cliniq: INFO
+    org.springframework.security: WARN
+    org.hibernate.SQL: WARN

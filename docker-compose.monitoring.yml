@@ -1,0 +1,448 @@
+# =============================================================
+# devops/docker-compose.monitoring.yml
+# ClinIQ — Observability Stack
+# Run alongside main compose:
+#   docker-compose -f docker-compose.yml -f devops/docker-compose.monitoring.yml up -d
+# Provides:
+#   Prometheus  :9090  — metrics scraping + alerting
+#   Grafana     :3001  — dashboards (admin/cliniq_grafana)
+#   Loki        :3100  — log aggregation
+#   Promtail           — Docker log shipper → Loki
+#   AlertManager:9093  — alert routing (email / Slack)
+#   Node Exporter:9100 — host system metrics
+# =============================================================
+
+version: '3.9'
+
+services:
+
+  # ──────────────────────────────────────────
+  # Prometheus — metrics collection
+  # ──────────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:v2.53.0
+    container_name: cliniq_prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./devops/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./devops/prometheus/alert-rules.yml:/etc/prometheus/alert-rules.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=30d'
+      - '--web.enable-lifecycle'
+      - '--web.enable-admin-api'
+    networks:
+      - cliniq_net
+      - monitoring_net
+
+  # ──────────────────────────────────────────
+  # AlertManager — alert routing
+  # ──────────────────────────────────────────
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    container_name: cliniq_alertmanager
+    restart: unless-stopped
+    ports:
+      - "9093:9093"
+    volumes:
+      - ./devops/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanager_data:/alertmanager
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+      - '--storage.path=/alertmanager'
+    networks:
+      - monitoring_net
+
+  # ──────────────────────────────────────────
+  # Grafana — dashboards
+  # ──────────────────────────────────────────
+  grafana:
+    image: grafana/grafana:11.1.0
+    container_name: cliniq_grafana
+    restart: unless-stopped
+    ports:
+      - "3001:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER:     admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-cliniq_grafana}
+      GF_SERVER_ROOT_URL:         https://${DOMAIN:-localhost}/grafana
+      GF_ANALYTICS_REPORTING_ENABLED: false
+      GF_USERS_ALLOW_SIGN_UP:    false
+      GF_AUTH_ANONYMOUS_ENABLED: false
+      GF_SMTP_ENABLED:           ${SMTP_ENABLED:-false}
+      GF_SMTP_HOST:              ${SMTP_HOST:-smtp.gmail.com:587}
+      GF_SMTP_USER:              ${SMTP_USER:-}
+      GF_SMTP_PASSWORD:          ${SMTP_PASSWORD:-}
+      GF_SMTP_FROM_ADDRESS:      ${SMTP_USER:-alerts@cliniq.app}
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./devops/grafana/provisioning:/etc/grafana/provisioning:ro
+    networks:
+      - monitoring_net
+    depends_on:
+      - prometheus
+      - loki
+
+  # ──────────────────────────────────────────
+  # Loki — log aggregation
+  # ──────────────────────────────────────────
+  loki:
+    image: grafana/loki:3.0.0
+    container_name: cliniq_loki
+    restart: unless-stopped
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./devops/loki/loki.yml:/etc/loki/loki.yml:ro
+      - loki_data:/loki
+    command: -config.file=/etc/loki/loki.yml
+    networks:
+      - monitoring_net
+
+  # ──────────────────────────────────────────
+  # Promtail — ships Docker logs → Loki
+  # ──────────────────────────────────────────
+  promtail:
+    image: grafana/promtail:3.0.0
+    container_name: cliniq_promtail
+    restart: unless-stopped
+    volumes:
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./devops/promtail/promtail.yml:/etc/promtail/promtail.yml:ro
+    command: -config.file=/etc/promtail/promtail.yml
+    networks:
+      - monitoring_net
+      - cliniq_net
+
+  # ──────────────────────────────────────────
+  # Node Exporter — host system metrics
+  # ──────────────────────────────────────────
+  node-exporter:
+    image: prom/node-exporter:v1.8.1
+    container_name: cliniq_node_exporter
+    restart: unless-stopped
+    ports:
+      - "9100:9100"
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.rootfs=/rootfs'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    networks:
+      - monitoring_net
+
+volumes:
+  prometheus_data:
+  grafana_data:
+  loki_data:
+  alertmanager_data:
+
+networks:
+  monitoring_net:
+    driver: bridge
+  cliniq_net:
+    external: true
+
+
+# =============================================================
+# SAVE AS: devops/prometheus/prometheus.yml
+# =============================================================
+# global:
+#   scrape_interval:     15s
+#   evaluation_interval: 15s
+#   external_labels:
+#     environment: production
+#     app: cliniq
+#
+# rule_files:
+#   - /etc/prometheus/alert-rules.yml
+#
+# alerting:
+#   alertmanagers:
+#     - static_configs:
+#         - targets: ['alertmanager:9093']
+#
+# scrape_configs:
+#   - job_name: 'cliniq-backend'
+#     metrics_path: '/actuator/prometheus'
+#     static_configs:
+#       - targets: ['backend:8080']
+#     relabel_configs:
+#       - source_labels: [__address__]
+#         target_label: instance
+#         replacement: 'cliniq-backend'
+#
+#   - job_name: 'node-exporter'
+#     static_configs:
+#       - targets: ['node-exporter:9100']
+#
+#   - job_name: 'prometheus'
+#     static_configs:
+#       - targets: ['localhost:9090']
+
+
+# =============================================================
+# SAVE AS: devops/prometheus/alert-rules.yml
+# =============================================================
+# groups:
+#   - name: cliniq-availability
+#     rules:
+#       - alert: BackendDown
+#         expr: up{job="cliniq-backend"} == 0
+#         for: 2m
+#         labels:
+#           severity: critical
+#         annotations:
+#           summary: "ClinIQ backend is down"
+#           description: "Backend has been unreachable for 2 minutes"
+#
+#       - alert: HighErrorRate
+#         expr: >
+#           sum(rate(http_server_requests_seconds_count{status=~"5.."}[5m]))
+#           / sum(rate(http_server_requests_seconds_count[5m])) > 0.05
+#         for: 5m
+#         labels:
+#           severity: warning
+#         annotations:
+#           summary: "High 5xx error rate ({{ humanizePercentage $value }})"
+#
+#       - alert: SlowResponses
+#         expr: >
+#           histogram_quantile(0.95,
+#             rate(http_server_requests_seconds_bucket[5m])) > 2
+#         for: 10m
+#         labels:
+#           severity: warning
+#         annotations:
+#           summary: "95th percentile response time > 2s"
+#
+#   - name: cliniq-resources
+#     rules:
+#       - alert: HighMemoryUsage
+#         expr: >
+#           (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) > 0.85
+#         for: 5m
+#         labels:
+#           severity: warning
+#         annotations:
+#           summary: "Memory usage above 85%"
+#
+#       - alert: LowDiskSpace
+#         expr: >
+#           (node_filesystem_avail_bytes{mountpoint="/"} /
+#            node_filesystem_size_bytes{mountpoint="/"}) < 0.10
+#         for: 5m
+#         labels:
+#           severity: critical
+#         annotations:
+#           summary: "Disk space below 10% on /"
+#
+#       - alert: DatabaseConnectionPoolExhausted
+#         expr: hikaricp_connections_pending > 5
+#         for: 2m
+#         labels:
+#           severity: warning
+#         annotations:
+#           summary: "DB connection pool has {{ $value }} pending requests"
+#
+#       - alert: RedisDown
+#         expr: redis_connected_clients == 0
+#         for: 1m
+#         labels:
+#           severity: critical
+#         annotations:
+#           summary: "Redis is unreachable"
+
+
+# =============================================================
+# SAVE AS: devops/alertmanager/alertmanager.yml
+# =============================================================
+# global:
+#   smtp_smarthost: '${SMTP_HOST}:587'
+#   smtp_from: 'alerts@cliniq.app'
+#   smtp_auth_username: '${SMTP_USER}'
+#   smtp_auth_password: '${SMTP_PASSWORD}'
+#   smtp_require_tls: true
+#
+# route:
+#   group_by: ['alertname']
+#   group_wait:      30s
+#   group_interval:  5m
+#   repeat_interval: 4h
+#   receiver: 'clinic-admin-email'
+#   routes:
+#     - match:
+#         severity: critical
+#       receiver: 'clinic-admin-email'
+#       repeat_interval: 1h
+#
+# receivers:
+#   - name: 'clinic-admin-email'
+#     email_configs:
+#       - to: '${ADMIN_EMAIL}'
+#         send_resolved: true
+#         headers:
+#           Subject: '[ClinIQ {{ .Status | toUpper }}] {{ .CommonAnnotations.summary }}'
+
+
+# =============================================================
+# SAVE AS: devops/loki/loki.yml
+# =============================================================
+# auth_enabled: false
+# server:
+#   http_listen_port: 3100
+#   grpc_listen_port: 9096
+# common:
+#   path_prefix: /loki
+#   storage:
+#     filesystem:
+#       chunks_directory: /loki/chunks
+#       rules_directory: /loki/rules
+#   replication_factor: 1
+#   ring:
+#     instance_addr: 127.0.0.1
+#     kvstore:
+#       store: inmemory
+# schema_config:
+#   configs:
+#     - from: 2024-01-01
+#       store: tsdb
+#       object_store: filesystem
+#       schema: v13
+#       index:
+#         prefix: index_
+#         period: 24h
+# limits_config:
+#   retention_period: 30d
+#   ingestion_rate_mb: 16
+#   ingestion_burst_size_mb: 32
+
+
+# =============================================================
+# SAVE AS: devops/promtail/promtail.yml
+# =============================================================
+# server:
+#   http_listen_port: 9080
+#   grpc_listen_port: 0
+#
+# positions:
+#   filename: /tmp/positions.yaml
+#
+# clients:
+#   - url: http://loki:3100/loki/api/v1/push
+#
+# scrape_configs:
+#   - job_name: docker-containers
+#     docker_sd_configs:
+#       - host: unix:///var/run/docker.sock
+#         refresh_interval: 5s
+#         filters:
+#           - name: label
+#             values: ['com.docker.compose.project=cliniq']
+#     relabel_configs:
+#       - source_labels: ['__meta_docker_container_name']
+#         target_label: container
+#       - source_labels: ['__meta_docker_container_label_com_docker_compose_service']
+#         target_label: service
+
+
+# =============================================================
+# SAVE AS: devops/grafana/provisioning/datasources/datasources.yml
+# =============================================================
+# apiVersion: 1
+# datasources:
+#   - name: Prometheus
+#     type: prometheus
+#     access: proxy
+#     url: http://prometheus:9090
+#     isDefault: true
+#     editable: false
+#
+#   - name: Loki
+#     type: loki
+#     access: proxy
+#     url: http://loki:3100
+#     editable: false
+
+
+# =============================================================
+# SAVE AS: devops/grafana/provisioning/dashboards/dashboards.yml
+# =============================================================
+# apiVersion: 1
+# providers:
+#   - name: ClinIQ
+#     orgId: 1
+#     type: file
+#     disableDeletion: false
+#     updateIntervalSeconds: 30
+#     allowUiUpdates: true
+#     options:
+#       path: /var/lib/grafana/dashboards
+#
+# # Import these dashboards from grafana.com after setup:
+# # Spring Boot dashboard:  https://grafana.com/dashboards/12900
+# # Node Exporter:          https://grafana.com/dashboards/1860
+# # JVM Micrometer:         https://grafana.com/dashboards/4701
+# # PostgreSQL:             https://grafana.com/dashboards/9628
+# # Loki / Logs:            https://grafana.com/dashboards/13639
+
+
+# =============================================================
+# NGINX PRODUCTION CONFIG
+# SAVE AS: devops/nginx/cliniq.conf
+# =============================================================
+# upstream cliniq_backend  { server backend:8080;  keepalive 32; }
+# upstream cliniq_frontend { server frontend:3000; }
+# upstream cliniq_chatbot  { server chatbot:5000;  }
+# upstream cliniq_grafana  { server grafana:3000;  }
+#
+# limit_req_zone $binary_remote_addr zone=api:10m     rate=60r/m;
+# limit_req_zone $binary_remote_addr zone=public:10m  rate=20r/m;
+# limit_req_zone $binary_remote_addr zone=auth:10m    rate=10r/m;
+#
+# server {
+#     listen 80;
+#     server_name DOMAIN_NAME;
+#     location /.well-known/acme-challenge/ { root /var/www/certbot; }
+#     location / { return 301 https://$host$request_uri; }
+# }
+#
+# server {
+#     listen 443 ssl http2;
+#     server_name DOMAIN_NAME;
+#
+#     ssl_certificate     /etc/letsencrypt/live/DOMAIN_NAME/fullchain.pem;
+#     ssl_certificate_key /etc/letsencrypt/live/DOMAIN_NAME/privkey.pem;
+#     ssl_protocols       TLSv1.2 TLSv1.3;
+#     ssl_session_cache   shared:SSL:10m;
+#     ssl_session_timeout 10m;
+#
+#     add_header X-Frame-Options             "DENY"                                always;
+#     add_header X-Content-Type-Options      "nosniff"                             always;
+#     add_header Referrer-Policy             "strict-origin-when-cross-origin"     always;
+#     add_header Strict-Transport-Security   "max-age=63072000; includeSubDomains" always;
+#     add_header Permissions-Policy          "camera=(), microphone=(), geolocation=()" always;
+#
+#     gzip on;
+#     gzip_types text/plain application/json text/css application/javascript application/xml;
+#     gzip_min_length 1024;
+#     client_max_body_size 25M;
+#
+#     location /api/v1/auth/    { limit_req zone=auth  burst=5  nodelay; proxy_pass http://cliniq_backend; include proxy_params; }
+#     location /api/v1/public/  { limit_req zone=public burst=10 nodelay; proxy_pass http://cliniq_backend; include proxy_params; }
+#     location /api/            { limit_req zone=api  burst=20 nodelay; proxy_pass http://cliniq_backend; include proxy_params; }
+#     location /actuator/health { proxy_pass http://cliniq_backend; access_log off; }
+#     location /ws/             { proxy_pass http://cliniq_backend; proxy_http_version 1.1; proxy_set_header Upgrade $http_upgrade; proxy_set_header Connection "upgrade"; }
+#     location /webhook/        { limit_req zone=public burst=5 nodelay; proxy_pass http://cliniq_chatbot; include proxy_params; }
+#     location /grafana/        { proxy_pass http://cliniq_grafana/; include proxy_params; }
+#     location /                { proxy_pass http://cliniq_frontend; include proxy_params; }
+# }

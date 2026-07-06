@@ -1,0 +1,86 @@
+services:
+
+  db:
+    image: postgres:16-alpine
+    container_name: cliniq_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB:       ${DB_NAME:-cliniq}
+      POSTGRES_USER:     ${DB_USER:-cliniq}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-cliniq_dev_password}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-cliniq} -d ${DB_NAME:-cliniq}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - cliniq_net
+
+  redis:
+    image: redis:7-alpine
+    container_name: cliniq_redis
+    restart: unless-stopped
+    command: >
+      redis-server
+      --requirepass ${REDIS_PASSWORD:-redis_dev_password}
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-redis_dev_password}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - cliniq_net
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: cliniq_backend
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      DATABASE_URL:           jdbc:postgresql://db:5432/${DB_NAME:-cliniq}
+      DATABASE_USER:          ${DB_USER:-cliniq}
+      DATABASE_PASSWORD:      ${DB_PASSWORD:-cliniq_dev_password}
+      REDIS_HOST:             redis
+      REDIS_PORT:             6379
+      REDIS_PASSWORD:         ${REDIS_PASSWORD:-redis_dev_password}
+      JWT_SECRET:             ${JWT_SECRET:-cliniq_jwt_secret_64chars_minimum_change_in_production_now}
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
+      AT_API_KEY:             ${AT_API_KEY:-}
+      AT_USERNAME:            ${AT_USERNAME:-sandbox}
+      MPESA_SANDBOX:          ${MPESA_SANDBOX:-true}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:8080/actuator/health || exit 1"]
+      interval: 30s
+      timeout: 15s
+      retries: 5
+      start_period: 120s
+    networks:
+      - cliniq_net
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  cliniq_net:
+    driver: bridge
