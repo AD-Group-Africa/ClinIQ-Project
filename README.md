@@ -125,7 +125,7 @@ A fresh database is fully reproducible from these migrations. **Never edit an ap
 
 - **Backend (Harrison)** — this repository.
 - **AI (Alvin)** — separate service (Python/FastAPI) that calls the backend API; the backend remains the system of record.
-- **Frontend (Victor/Yvonne)** — builds against the OpenAPI spec and the DTOs in this repo; no database access.
+- **Frontend (Yvonne)** — builds against the OpenAPI spec and the DTOs in this repo; no database access.
 
 ---
 
