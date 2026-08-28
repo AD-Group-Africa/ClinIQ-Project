@@ -22,9 +22,6 @@ interface InvoiceRepository : JpaRepository<Invoice, UUID> {
     @Query("SELECT i FROM Invoice i WHERE i.clinicId = :clinicId AND i.status = :status ORDER BY i.issuedAt DESC")
     fun findByStatus(clinicId: UUID, status: InvoiceStatus, pageable: Pageable): Page<Invoice>
 
-    @Query("SELECT i FROM Invoice i WHERE i.clinicId = :clinicId ORDER BY i.issuedAt DESC")
-    fun listInvoices(clinicId: UUID, pageable: Pageable): Page<Invoice>
-
     @Query("SELECT COALESCE(SUM(i.total), 0) FROM Invoice i WHERE i.clinicId = :clinicId AND i.issuedAt >= :from AND i.issuedAt < :to")
     fun sumRevenue(clinicId: UUID, from: Instant, to: Instant): BigDecimal
 

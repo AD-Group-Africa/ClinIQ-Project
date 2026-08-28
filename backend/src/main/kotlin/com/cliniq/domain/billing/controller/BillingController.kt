@@ -1,9 +1,11 @@
 package com.cliniq.domain.billing.controller
 
 import com.cliniq.domain.billing.dto.*
+import com.cliniq.domain.billing.entity.InvoiceStatus
 import com.cliniq.domain.billing.service.BillingService
 import com.cliniq.domain.auth.security.JwtAuthenticationToken
 import com.cliniq.shared.response.ApiResponse
+import com.cliniq.shared.exceptions.BadRequestException
 import io.swagger.v3.oas.annotations.enums.SecuritySchemeIn
 import io.swagger.v3.oas.annotations.enums.SecuritySchemeType
 import io.swagger.v3.oas.annotations.media.Content
@@ -13,7 +15,6 @@ import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.Parameter
 import io.swagger.v3.oas.annotations.ParameterObject
 import jakarta.validation.Valid
-import org.springframework.data.domain.PageRequest
 import org.springframework.data.domain.Pageable
 import org.springframework.http.ResponseEntity
 import org.springframework.security.access.prepost.PreAuthorize
@@ -133,21 +134,30 @@ class BillingController(private val billingService: BillingService) {
 
     @Operation(
         summary = "List invoices with pagination",
-        description = "Retrieves a paginated list of invoices for the authenticated clinic",
+        description = "Retrieves a paginated list of invoices for the authenticated clinic. " +
+            "Supports `?page=0&size=20&sort=issuedAt,desc` and optional `?status=ISSUED|PAID|PARTIAL|OVERDUE|CANCELLED`.",
         security = arrayOf(@SecurityScheme(name = "Bearer authentication"))
     )
-    @ParameterObject
     @GetMapping("/invoices")
     @PreAuthorize("hasAnyRole('CLINIC_ADMIN','RECEPTIONIST','FINANCE','SUPER_ADMIN')")
     fun listInvoices(
-        @Operation(hidden = true)
-        @Parameter(hidden = true)
-        @AuthenticationPrincipal auth: JwtAuthenticationToken,
-        @ParameterObject
-        pageable: Pageable
-    ) = ResponseEntity.ok(ApiResponse.success(
-        billingService.listInvoices(auth.clinicId!!, pageable)
-    ))
+        @ParameterObject pageable: Pageable,
+        @Parameter(description = "Optional status filter", example = "ISSUED")
+        @RequestParam(required = false) status: String?,
+        @AuthenticationPrincipal auth: JwtAuthenticationToken
+    ): ResponseEntity<ApiResponse<Any>> {
+        val page = if (status.isNullOrBlank()) {
+            billingService.listInvoices(auth.clinicId!!, pageable)
+        } else {
+            val parsed = try {
+                InvoiceStatus.valueOf(status.uppercase())
+            } catch (e: IllegalArgumentException) {
+                throw BadRequestException("Unknown status: $status")
+            }
+            billingService.listInvoicesByStatus(auth.clinicId!!, parsed, pageable)
+        }
+        return ResponseEntity.ok(ApiResponse.success(page))
+    }
 
     @Operation(
         summary = "Get monthly revenue report",

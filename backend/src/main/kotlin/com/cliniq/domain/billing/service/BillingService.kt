@@ -10,11 +10,9 @@ import com.cliniq.shared.exceptions.*
 import org.slf4j.LoggerFactory
 import org.springframework.data.domain.Page
 import org.springframework.data.domain.Pageable
-import org.springframework.data.domain.PageRequest
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.math.BigDecimal
-import java.math.RoundingMode
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -213,12 +211,17 @@ class BillingService(
     }
 
     @Transactional(readOnly = true)
-    fun listInvoices(clinicId: UUID, pageable: Pageable): Page<Invoice> {
-        val filter: String? = null
-        return when (filter) {
-            null -> invoiceRepository.findByClinicId(clinicId, pageable)
-            else -> invoiceRepository.findByClinicIdAndFilter(clinicId, filter, pageable)
-        }
+    fun listInvoices(clinicId: UUID, pageable: Pageable): Page<Invoice> =
+        invoiceRepository.findByClinicId(clinicId, pageable)
+
+    @Transactional(readOnly = true)
+    fun listInvoicesByStatus(clinicId: UUID, status: InvoiceStatus, pageable: Pageable): Page<Invoice> =
+        invoiceRepository.findByStatus(clinicId, status, pageable)
+
+    @Transactional(readOnly = true)
+    fun searchInvoices(clinicId: UUID, filter: String, pageable: Pageable): Page<Invoice> {
+        require(filter.isNotBlank()) { "filter must not be blank" }
+        return invoiceRepository.findByClinicIdAndFilter(clinicId, filter, pageable)
     }
 
     private fun Invoice.toResponse(patientName: String, payments: List<Payment>) = InvoiceResponse(
