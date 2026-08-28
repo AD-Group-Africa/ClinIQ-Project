@@ -10,6 +10,7 @@ import com.cliniq.shared.exceptions.*
 import org.slf4j.LoggerFactory
 import org.springframework.data.domain.Page
 import org.springframework.data.domain.Pageable
+import org.springframework.data.domain.PageRequest
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.math.BigDecimal
@@ -74,7 +75,7 @@ class BillingService(
         auditService.log(clinicId, createdBy, "CREATE_INVOICE", "invoice", invoice.id,
             newValues = mapOf("total" to total, "patient" to patient.fullName))
 
-        log.info("Invoice {} created for {} — KES {}", invoice.invoiceNumber, patient.fullName, total)
+        log.info("Invoice {} created for {} ï¿½ KES {}", invoice.invoiceNumber, patient.fullName, total)
         return invoice.toResponse(patient.fullName, emptyList())
     }
 
@@ -209,6 +210,15 @@ class BillingService(
         val prefix = "INV-$year-"
         val maxSeq = invoiceRepository.findMaxSequence(clinicId, prefix) ?: 0
         return "$prefix${(maxSeq + 1).toString().padStart(4, '0')}"
+    }
+
+    @Transactional(readOnly = true)
+    fun listInvoices(clinicId: UUID, pageable: Pageable): Page<Invoice> {
+        val filter: String? = null
+        return when (filter) {
+            null -> invoiceRepository.findByClinicId(clinicId, pageable)
+            else -> invoiceRepository.findByClinicIdAndFilter(clinicId, filter, pageable)
+        }
     }
 
     private fun Invoice.toResponse(patientName: String, payments: List<Payment>) = InvoiceResponse(

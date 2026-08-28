@@ -1,51 +1,72 @@
-# ClinIQ — Clinic Management Platform
+# ClinIQ Backend
 
-## Quick Start
+## Clinic Management System API
 
-```powershell
-# 1. Copy env and fill values
-copy .env.example .env
-notepad .env
+### Quick Start
+```bash
+# 1. Start infrastructure
+docker compose up -d
 
-# 2. Launch everything
-.\scripts\Launch-ClinIQ.ps1
+# 2. Start the backend
+cd backend && ./gradlew bootRun
 
-# 3. Test API
-.\scripts\Test-ClinIQ.ps1
+# 3. Access the API
+#   - Base: http://localhost:8080/api/v1/
+#   - Swagger UI: http://localhost:8080/swagger-ui.html
+#   - API Docs: http://localhost:8080/v3/api-docs
 ```
 
-## What is built
+### Available Scripts
+| Command | Description |
+|---------|-------------|
+| `./gradlew build` | Compile and test |
+| `./gradlew test` | Run tests only |
+| `./gradlew bootRun` | Run Spring Boot app |
+| `./gradlew detekt` | Static code analysis |
+| `./gradlew dependencyCheckReport` | Security scan dependencies |
+| `docker compose up -d` | Start all services via Docker |
+| `docker compose down -v` | Stop and remove volumes |
 
-| Module              | Backend | Status          |
-|---------------------|---------|-----------------|
-| Auth & JWT & RBAC   | 100%    | Production ready|
-| Clinic management   | 100%    | Production ready|
-| Patient management  | 100%    | Production ready|
-| Appointments/Queue  | 100%    | Production ready|
-| Consultation & Rx   | 100%    | Production ready|
-| Communication       | 100%    | Stub (no SMS)   |
-| Pharmacy            | 0%      | Not started     |
-| Laboratory          | 0%      | Not started     |
-| Billing             | 0%      | Not started     |
-| Analytics           | 0%      | Not started     |
-| CRM                 | 0%      | Not started     |
-| Frontend (Next.js)  | 0%      | Not started     |
+### Key Features
+- **REST API** under `/api/v1/` with pagination and filtering
+- **JWT authentication** with `ROLE_` prefixed authorities
+- **Clinic isolation** via `X-Clinic-ID` header
+- **RBAC**: SUPER_ADMIN, CLINIC_ADMIN, DOCTOR, RECEPTIONIST, PATIENT
+- **Flyway database migrations**: V1 → V2 → V3
+- **SpringDoc Swagger**: `/swagger-ui.html` and `/v3/api-docs`
+- **Redis** for token blacklisting + caching
+- **BCrypt password hashing**
+- **ApiResponse<T>** wrapper on all endpoints
 
-## What is missing (to complete)
+### Technology Stack
+- **Language**: Kotlin 1.9 + Spring Boot 3.3.4
+- **Database**: PostgreSQL 16 + Flyway
+- **Cache**: Redis 7
+- **Security**: JWT + BCrypt + Spring Security
+- **Build**: Gradle 8.x
+- **Container**: Docker + Docker Compose
 
-1. Flyway V1__init_schema.sql migration
-2. Pharmacy module  (entity/repo/service/controller)
-3. Lab module       (entity/repo/service/controller)
-4. Billing module   (entity/repo/service/controller + M-Pesa)
-5. Analytics module (SQL views + service + controller)
-6. CRM module       (campaigns + follow-ups)
-7. Frontend         (Next.js login/dashboard/reception/doctor pages)
-8. AfricasTalking SMS integration
-9. Unit + integration tests
-10. Flyway migrations V2-V5
+### Project Structure
+```
+clin-iq/
+├── backend/          # Spring Boot Kotlin backend
+│   ├── src/main/    # Main source set
+│   ├── src/test/    # Test code
+│   └── docker-compose.yml
+├── frontend/         # React/Vue frontend (TBD)
+├── docker-compose.yml # Infrastructure services
+└── docs/             # Documentation (see docs/ folder)
+```
 
-## URLs (after `docker-compose up -d`)
+### Documentation
+- `docs/architecture.md` — High-level design
+- `docs/api.md` — OpenAPI summary
+- `docs/security.md` — Auth flows, roles, permissions
+- `docs/database.md` — Schema overview
+- `docs/development.md` — Local setup, testing
+- `docs/deployment.md` — Staging/production deployment
+- `docs/backup_restore.md` — Backup/restore procedures
+- `docs/frontend_handoff.md` — Frontend integration guide
 
-- Backend health: http://localhost:8080/actuator/health
-- Swagger:        http://localhost:8080/swagger-ui.html
-- API docs:       http://localhost:8080/v3/api-docs
+### License
+Proprietary — ClinIQ Healthcare Platform

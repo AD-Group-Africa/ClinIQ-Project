@@ -1,48 +1,39 @@
 'use client';
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
-import api from '@/lib/api';
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import api from "@/lib/api";
+import toast from "react-hot-toast";
 
 export default function LoginPage() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
   const router = useRouter();
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    setLoading(true);
     try {
-      const res = await api.post('/auth/login', { email, password });
-      localStorage.setItem('token', res.data.data.token);
-      router.push('/dashboard/reception');
+      const res = await api.post("/auth/login", { email, password });
+      const { accessToken, refreshToken } = res.data.data;
+      localStorage.setItem("accessToken", accessToken);
+      localStorage.setItem("refreshToken", refreshToken);
+      router.push("/dashboard/reception");
     } catch (err: any) {
-      setError(err.response?.data?.error?.message || 'Login failed');
+      toast.error(err.response?.data?.error?.message || "Login failed");
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100">
-      <form onSubmit={handleSubmit} className="bg-white p-8 rounded-lg shadow-md w-96">
-        <h1 className="text-2xl font-bold mb-6 text-center">ClinIQ Login</h1>
-        {error && <div className="text-red-500 mb-4">{error}</div>}
-        <input
-          type="email"
-          placeholder="Email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          className="w-full p-2 border rounded mb-4"
-          required
-        />
-        <input
-          type="password"
-          placeholder="Password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          className="w-full p-2 border rounded mb-6"
-          required
-        />
-        <button type="submit" className="w-full bg-blue-600 text-white p-2 rounded hover:bg-blue-700">
-          Sign In
+    <div className="w-full min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-white">
+      <form onSubmit={handleLogin} className="bg-white p-8 rounded-xl shadow-lg w-full max-w-md">
+        <h1 className="text-2xl font-bold text-center mb-6 text-clinic-600">ClinIQ Login</h1>
+        <input type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full p-3 border rounded-lg mb-4 focus:outline-none focus:ring-2 focus:ring-clinic-500" required />
+        <input type="password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full p-3 border rounded-lg mb-6 focus:outline-none focus:ring-2 focus:ring-clinic-500" required />
+        <button type="submit" disabled={loading} className="w-full bg-clinic-600 text-white py-3 rounded-lg font-semibold hover:bg-clinic-700 transition-colors disabled:opacity-50">
+          {loading ? "Signing in..." : "Sign In"}
         </button>
       </form>
     </div>

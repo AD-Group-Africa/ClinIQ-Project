@@ -2,25 +2,28 @@ package com.cliniq.domain.billing.dto
 
 import com.cliniq.domain.billing.entity.InvoiceStatus
 import com.cliniq.domain.billing.entity.PaymentMethod
+import io.swagger.v3.oas.annotations.media.Schema
 import jakarta.validation.constraints.*
 import java.math.BigDecimal
 import java.time.Instant
 import java.time.LocalDate
 import java.util.UUID
 
+@Schema(description = "Invoice creation request")
 data class CreateInvoiceRequest(
-    @field:NotNull val patientId: UUID,
+    @field:NotNull @Schema(description = "Patient ID", example = "11111111-1111-1111-1111-111111111111") val patientId: UUID,
     val appointmentId: UUID? = null,
-    @field:NotEmpty val lineItems: List<LineItemRequest>,
-    val discount: BigDecimal = BigDecimal.ZERO,
-    val notes: String? = null,
-    val dueDate: LocalDate? = null
+    @field:NotEmpty @Schema(description = "Line items") val lineItems: List<LineItemRequest>,
+    @Schema(description = "Discount amount", defaultValue = "0") val discount: BigDecimal = BigDecimal.ZERO,
+    @Schema(description = "Optional notes") val notes: String? = null,
+    @Schema(description = "Due date") val dueDate: LocalDate? = null
 )
 
+@Schema(description = "Line item for invoice")
 data class LineItemRequest(
-    @field:NotBlank val description: String,
-    @field:Min(1) val quantity: Int = 1,
-    @field:DecimalMin("0.0") val unitPrice: BigDecimal
+    @field:NotBlank @Schema(description = "Description", example = "Consultation fee") val description: String,
+    @field:Min(1) @Schema(description = "Quantity", example = "2") val quantity: Int = 1,
+    @field:DecimalMin("0.0") @Schema(description = "Unit price", example = "500.00") val unitPrice: BigDecimal
 )
 
 data class RecordPaymentRequest(

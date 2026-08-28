@@ -22,6 +22,9 @@ interface InvoiceRepository : JpaRepository<Invoice, UUID> {
     @Query("SELECT i FROM Invoice i WHERE i.clinicId = :clinicId AND i.status = :status ORDER BY i.issuedAt DESC")
     fun findByStatus(clinicId: UUID, status: InvoiceStatus, pageable: Pageable): Page<Invoice>
 
+    @Query("SELECT i FROM Invoice i WHERE i.clinicId = :clinicId ORDER BY i.issuedAt DESC")
+    fun listInvoices(clinicId: UUID, pageable: Pageable): Page<Invoice>
+
     @Query("SELECT COALESCE(SUM(i.total), 0) FROM Invoice i WHERE i.clinicId = :clinicId AND i.issuedAt >= :from AND i.issuedAt < :to")
     fun sumRevenue(clinicId: UUID, from: Instant, to: Instant): BigDecimal
 
@@ -33,4 +36,10 @@ interface InvoiceRepository : JpaRepository<Invoice, UUID> {
 
     @Query("SELECT COALESCE(MAX(CAST(SUBSTRING(i.invoiceNumber, LENGTH(:prefix)+1) AS INTEGER)), 0) FROM Invoice i WHERE i.clinicId = :clinicId AND i.invoiceNumber LIKE CONCAT(:prefix,'%')")
     fun findMaxSequence(clinicId: UUID, prefix: String): Int?
+
+    @Query("SELECT i FROM Invoice i WHERE i.clinicId = :clinicId ORDER BY i.issuedAt DESC")
+    fun findByClinicId(clinicId: UUID, pageable: Pageable): Page<Invoice>
+
+    @Query(value = "SELECT i FROM Invoice i WHERE i.clinicId = :clinicId AND (i.invoiceNumber LIKE CONCAT('%', :filter, '%') OR i.patientId IN (SELECT p.id FROM patients p WHERE p.clinicId = :clinicId))", nativeQuery = true)
+    fun findByClinicIdAndFilter(clinicId: UUID, filter: String, pageable: Pageable): Page<Invoice>
 }

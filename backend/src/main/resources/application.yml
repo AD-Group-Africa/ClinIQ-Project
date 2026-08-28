@@ -13,7 +13,7 @@ spring:
       pool-name: ClinIQ-Pool
   jpa:
     hibernate:
-      ddl-auto: validate
+      ddl-auto: none
     show-sql: false
     open-in-view: false
     properties:
@@ -23,18 +23,18 @@ spring:
   flyway:
     enabled: true
     locations: classpath:db/migration
-    validate-on-migrate: true
+    validate-on-migrate: false
   data:
     redis:
       host:     ${REDIS_HOST:localhost}
       port:     ${REDIS_PORT:6379}
-      password: ${REDIS_PASSWORD:redis_dev_password}
+      password: ${REDIS_PASSWORD}
       timeout:  5000ms
   cache:
     type: redis
 
 jwt:
-  secret:                ${JWT_SECRET:cliniq_jwt_secret_minimum_64_chars_long_change_in_production_now}
+  secret:                ${JWT_SECRET:development-secret-must-be-overridden-with-env-var}
   expiration-ms:         900000
   refresh-expiration-ms: 604800000
 
@@ -54,7 +54,7 @@ app:
   frontend-url: ${FRONTEND_URL:http://localhost:3000}
 
 server:
-  port: 8080
+  port: 8081
   error:
     include-message: never
     include-stacktrace: never

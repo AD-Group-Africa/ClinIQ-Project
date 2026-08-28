@@ -16,6 +16,9 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder
 import org.springframework.security.crypto.password.PasswordEncoder
 import org.springframework.security.web.SecurityFilterChain
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter
+import org.springframework.security.web.headers.DefaultHeaders
+import org.springframework.security.web.headers.HeadersFilter
+import jakarta.servlet.http.HttpServletResponse
 
 @Configuration
 @EnableWebSecurity
@@ -30,6 +33,15 @@ class SecurityConfig(
         .csrf { it.disable() }
         .cors { }
         .sessionManagement { it.sessionCreationPolicy(SessionCreationPolicy.STATELESS) }
+        .headers { headers ->
+            headers.contentSecurityPolicy("default-src 'self'")
+            headers.httpStrictTransportSecurity { hsts ->
+                hsts.maxAgeInSeconds(31536000).includeSubDomains(true)
+            }
+            headers.frameOptions(HeadersFrameOptions.X_FRAME_OPTIONS)
+            headers.referrerPolicy(HeadersReferrerPolicy.DEFAULT)
+            headers.contentTypeOptions()
+        }
         .authorizeHttpRequests { auth ->
             auth.requestMatchers(
                 "/api/v1/auth/**",

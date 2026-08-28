@@ -33,3 +33,35 @@ export interface Invoice {
   status: string;
   issuedAt: string;
 }
+
+export interface DrugStockResponse {
+  drugId: string;
+  name: string;
+  genericName?: string;
+  category: string;
+  unit: string;
+  totalStock: number;
+  reorderLevel: number;
+  sellingPrice: number;
+  stockStatus: string;
+  batchesExpiringSoon: number;
+  nearestExpiry?: string;
+}
+
+export interface LabTest {
+  id: string;
+  name: string;
+  code?: string;
+  category?: string;
+  price: number;
+}
+
+export interface LabRequest {
+  id: string;
+  requestNumber?: string;
+  patientName: string;
+  status: string;
+  priority: string;
+  tests: any[];
+  dueAt?: string;
+}
