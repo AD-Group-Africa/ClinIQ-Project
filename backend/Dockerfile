@@ -2,10 +2,11 @@ FROM eclipse-temurin:21-jdk-alpine AS build
 WORKDIR /app
 
 COPY gradle/         gradle/
-COPY gradlew.bat     gradlew
+COPY gradlew         gradlew
+COPY gradlew.bat     gradlew.bat
 COPY build.gradle.kts settings.gradle.kts ./
 
-RUN sed -i 's/\r$//' gradlew && chmod +x gradlew
+RUN chmod +x gradlew
 RUN ./gradlew dependencies --no-daemon -q 2>/dev/null || true
 
 COPY src/ src/

@@ -3,17 +3,17 @@ package com.cliniq.domain.billing.controller
 import com.cliniq.domain.billing.dto.*
 import com.cliniq.domain.billing.entity.InvoiceStatus
 import com.cliniq.domain.billing.service.BillingService
+import com.cliniq.domain.billing.service.MpesaService
 import com.cliniq.domain.auth.security.JwtAuthenticationToken
 import com.cliniq.shared.response.ApiResponse
 import com.cliniq.shared.exceptions.BadRequestException
-import io.swagger.v3.oas.annotations.enums.SecuritySchemeIn
-import io.swagger.v3.oas.annotations.enums.SecuritySchemeType
-import io.swagger.v3.oas.annotations.media.Content
-import io.swagger.v3.oas.annotations.media.ExampleObject
-import io.swagger.v3.oas.annotations.media.Schema
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.Parameter
-import io.swagger.v3.oas.annotations.ParameterObject
+import io.swagger.v3.oas.annotations.enums.SecuritySchemeIn
+import io.swagger.v3.oas.annotations.enums.SecuritySchemeType
+import io.swagger.v3.oas.annotations.security.SecurityRequirement
+import io.swagger.v3.oas.annotations.security.SecurityScheme
+import io.swagger.v3.oas.annotations.tags.Tag
 import jakarta.validation.Valid
 import org.springframework.data.domain.Pageable
 import org.springframework.http.ResponseEntity
@@ -24,27 +24,29 @@ import java.util.UUID
 
 @RestController
 @RequestMapping("/api/v1/billing")
+@Tag(name = "Billing", description = "Invoices, payments and revenue reporting")
 @SecurityScheme(
-    name = "Bearer authentication",
+    name = "bearerAuth",
     type = SecuritySchemeType.HTTP,
     scheme = "bearer",
-    bearerFormat = "JWT"
+    bearerFormat = "JWT",
+    `in` = SecuritySchemeIn.HEADER
 )
-class BillingController(private val billingService: BillingService) {
+class BillingController(
+    private val billingService: BillingService,
+    private val mpesaService: MpesaService
+) {
 
     @Operation(
         summary = "Create a new invoice",
-        description = "Creates a new invoice for a patient's appointment with line items",
-        security = arrayOf(@SecurityScheme(name = "Bearer authentication"))
+        description = "Creates a new invoice for a patient with line items",
+        security = [SecurityRequirement(name = "bearerAuth")]
     )
-    @ParameterObject
     @PostMapping("/invoices")
     @PreAuthorize("hasAnyRole('CLINIC_ADMIN','RECEPTIONIST','FINANCE','SUPER_ADMIN')")
     fun createInvoice(
-        @Operation(hidden = true)
-        @Parameter(hidden = true)
         @Valid @RequestBody request: CreateInvoiceRequest,
-        @AuthenticationPrincipal auth: JwtAuthenticationToken
+        @Parameter(hidden = true) @AuthenticationPrincipal auth: JwtAuthenticationToken
     ) = ResponseEntity.status(201).body(
         ApiResponse.success(billingService.createInvoice(auth.clinicId!!, request, auth.userId))
     )
@@ -52,33 +54,28 @@ class BillingController(private val billingService: BillingService) {
     @Operation(
         summary = "Get invoice by ID",
         description = "Retrieves a specific invoice by its unique identifier",
-        security = arrayOf(@SecurityScheme(name = "Bearer authentication"))
+        security = [SecurityRequirement(name = "bearerAuth")]
     )
-    @ParameterObject
     @GetMapping("/invoices/{id}")
     @PreAuthorize("hasAnyRole('CLINIC_ADMIN','RECEPTIONIST','FINANCE','SUPER_ADMIN')")
     fun getInvoice(
-        @Operation(summary = "Invoice ID", description = "The UUID of the invoice to retrieve")
-        @Parameter(name = "id", description = "The UUID of the invoice to retrieve", required = true, example = "11111111-1111-1111-1111-111111111111")
-        @PathVariable id: UUID,
-        @AuthenticationPrincipal auth: JwtAuthenticationToken
+        @Parameter(description = "The UUID of the invoice to retrieve") @PathVariable id: UUID,
+        @Parameter(hidden = true) @AuthenticationPrincipal auth: JwtAuthenticationToken
     ) = ResponseEntity.ok(ApiResponse.success(
         billingService.getInvoice(auth.clinicId!!, id)
     ))
 
     @Operation(
         summary = "Record a payment",
-        description = "Records a payment received against an invoice",
-        security = arrayOf(@SecurityScheme(name = "Bearer authentication"))
+        description = "Records a payment received against an invoice (cash, card, bank transfer, insurance). " +
+            "Server-side only: the frontend can never mark a payment as successful on its own.",
+        security = [SecurityRequirement(name = "bearerAuth")]
     )
-    @ParameterObject
     @PostMapping("/payments")
     @PreAuthorize("hasAnyRole('CLINIC_ADMIN','RECEPTIONIST','FINANCE','SUPER_ADMIN')")
     fun recordPayment(
-        @Operation(hidden = true)
-        @Parameter(hidden = true)
         @Valid @RequestBody request: RecordPaymentRequest,
-        @AuthenticationPrincipal auth: JwtAuthenticationToken
+        @Parameter(hidden = true) @AuthenticationPrincipal auth: JwtAuthenticationToken
     ) = ResponseEntity.status(201).body(
         ApiResponse.success(billingService.recordPayment(auth.clinicId!!, request, auth.userId))
     )
@@ -86,37 +83,44 @@ class BillingController(private val billingService: BillingService) {
     @Operation(
         summary = "Initiate M-Pesa payment",
         description = "Initiates an M-Pesa STK push payment for an invoice",
-        security = arrayOf(@SecurityScheme(name = "Bearer authentication"))
+        security = [SecurityRequirement(name = "bearerAuth")]
     )
-    @ParameterObject
     @PostMapping("/mpesa/initiate")
     @PreAuthorize("hasAnyRole('CLINIC_ADMIN','RECEPTIONIST','FINANCE','SUPER_ADMIN')")
     fun initiateMpesa(
-        @Operation(hidden = true)
-        @Parameter(hidden = true)
         @Valid @RequestBody request: InitiateMpesaRequest,
-        @AuthenticationPrincipal auth: JwtAuthenticationToken
+        @Parameter(hidden = true) @AuthenticationPrincipal auth: JwtAuthenticationToken
     ) = ResponseEntity.ok(ApiResponse.success(billingService.initiateMpesaPayment(auth.clinicId!!, request)))
 
     @Operation(
         summary = "Handle M-Pesa callback",
-        description = "Handles the M-Pesa STK push callback result",
-        security = arrayOf(@SecurityScheme(name = "Bearer authentication"))
+        description = "Webhook called by M-Pesa with the STK push result. Validates HMAC token when " +
+            "MPESA_CALLBACK_SECRET is configured. Malformed callbacks are rejected; duplicate receipts are idempotent.",
+        security = []
     )
-    @ParameterObject
     @PostMapping("/mpesa/callback")
     fun mpesaCallback(
-        @Operation(summary = "M-Pesa callback body", description = "The POST body from M-Pesa containing STK push results")
-        @Parameter(name = "body", description = "M-Pesa callback JSON body", required = true)
         @RequestBody body: Map<String, Any>,
-        @Operation(summary = "Invoice ID", description = "The invoice ID to update with callback results")
-        @Parameter(name = "invoiceId", description = "The invoice ID to update", required = true, example = "11111111-1111-1111-1111-111111111111")
-        @RequestParam invoiceId: UUID
+        @Parameter(description = "The invoice ID to update with callback results") @RequestParam invoiceId: UUID,
+        @Parameter(description = "HMAC callback token") @RequestParam(required = false) token: String?
     ): ResponseEntity<Map<String, String>> {
+        if (!mpesaService.isValidCallbackToken(invoiceId, token)) {
+            return ResponseEntity.status(401).body(mapOf("ResultCode" to "1", "ResultDesc" to "Invalid callback token"))
+        }
+        // Validate body shape
+        if (!body.containsKey("Body")) {
+            return ResponseEntity.badRequest().body(mapOf("ResultCode" to "1", "ResultDesc" to "Malformed body"))
+        }
         val stkCallback = (body["Body"] as? Map<*, *>)?.get("stkCallback") as? Map<*, *>
-        val resultCode = (stkCallback?.get("ResultCode") as? Int) ?: 1
-        val resultDesc = (stkCallback?.get("ResultDesc") as? String) ?: "Unknown"
-        val metadata = (stkCallback?.get("CallbackMetadata") as? Map<*, *>)?.get("Item") as? List<*>
+            ?: return ResponseEntity.badRequest().body(mapOf("ResultCode" to "1", "ResultDesc" to "Malformed stkCallback"))
+        val resultCode = when (val rc = stkCallback["ResultCode"]) {
+            is Int -> rc
+            is Number -> rc.toInt()
+            is String -> rc.toIntOrNull() ?: 1
+            else -> 1
+        }
+        val resultDesc = stkCallback["ResultDesc"] as? String ?: "Unknown"
+        val metadata = (stkCallback["CallbackMetadata"] as? Map<*, *>)?.get("Item") as? List<*>
 
         val amount = metadata?.filterIsInstance<Map<*, *>>()
             ?.find { it["Name"] == "Amount" }?.get("Value")
@@ -136,15 +140,15 @@ class BillingController(private val billingService: BillingService) {
         summary = "List invoices with pagination",
         description = "Retrieves a paginated list of invoices for the authenticated clinic. " +
             "Supports `?page=0&size=20&sort=issuedAt,desc` and optional `?status=ISSUED|PAID|PARTIAL|OVERDUE|CANCELLED`.",
-        security = arrayOf(@SecurityScheme(name = "Bearer authentication"))
+        security = [SecurityRequirement(name = "bearerAuth")]
     )
     @GetMapping("/invoices")
     @PreAuthorize("hasAnyRole('CLINIC_ADMIN','RECEPTIONIST','FINANCE','SUPER_ADMIN')")
     fun listInvoices(
-        @ParameterObject pageable: Pageable,
+        pageable: Pageable,
         @Parameter(description = "Optional status filter", example = "ISSUED")
         @RequestParam(required = false) status: String?,
-        @AuthenticationPrincipal auth: JwtAuthenticationToken
+        @Parameter(hidden = true) @AuthenticationPrincipal auth: JwtAuthenticationToken
     ): ResponseEntity<ApiResponse<Any>> {
         val page = if (status.isNullOrBlank()) {
             billingService.listInvoices(auth.clinicId!!, pageable)
@@ -162,21 +166,18 @@ class BillingController(private val billingService: BillingService) {
     @Operation(
         summary = "Get monthly revenue report",
         description = "Retrieves a revenue report for the specified year/month",
-        security = arrayOf(@SecurityScheme(name = "Bearer authentication"))
+        security = [SecurityRequirement(name = "bearerAuth")]
     )
-    @ParameterObject
     @GetMapping("/reports/revenue")
     @PreAuthorize("hasAnyRole('CLINIC_ADMIN','FINANCE','SUPER_ADMIN')")
     fun revenueReport(
-        @Operation(summary = "Year", description = "The year for the report (defaults to current year)")
-        @Parameter(name = "year", description = "The year for the report", required = false, defaultValue = "0", example = "2024")
+        @Parameter(description = "The year for the report (defaults to current year)", example = "2026")
         @RequestParam(defaultValue = "0") year: Int,
 
-        @Operation(summary = "Month", description = "The month for the report (1-12, defaults to current month)")
-        @Parameter(name = "month", description = "The month for the report (1-12, defaults to current month)", required = false, defaultValue = "0", example = "1")
+        @Parameter(description = "The month for the report (1-12, defaults to current month)", example = "8")
         @RequestParam(defaultValue = "0") month: Int,
 
-        @AuthenticationPrincipal auth: JwtAuthenticationToken
+        @Parameter(hidden = true) @AuthenticationPrincipal auth: JwtAuthenticationToken
     ): ResponseEntity<ApiResponse<RevenueReport>> {
         val now = java.time.LocalDate.now()
         val y = if (year == 0) now.year else year

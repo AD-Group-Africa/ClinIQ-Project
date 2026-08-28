@@ -2,7 +2,7 @@ spring:
   application:
     name: cliniq-backend
   datasource:
-    url:      ${DATABASE_URL:jdbc:postgresql://localhost:5432/cliniq}
+    url:      ${DATABASE_URL:jdbc:postgresql://localhost:5434/cliniq}
     username: ${DATABASE_USER:cliniq}
     password: ${DATABASE_PASSWORD:cliniq_dev_password}
     driver-class-name: org.postgresql.Driver
@@ -48,10 +48,22 @@ mpesa:
   shortcode:       ${MPESA_SHORTCODE:174379}
   passkey:         ${MPESA_PASSKEY:}
   callback-url:    ${MPESA_CALLBACK_URL:http://localhost:8080/api/v1/billing/mpesa/callback}
+  callback-secret: ${MPESA_CALLBACK_SECRET:}
   sandbox:         ${MPESA_SANDBOX:true}
 
 app:
   frontend-url: ${FRONTEND_URL:http://localhost:3000}
+  auth-rate-limit:
+    enabled: ${AUTH_RATE_LIMIT_ENABLED:true}
+    login:
+      max-attempts: ${AUTH_LOGIN_RATE_LIMIT:5}
+      window-seconds: ${AUTH_LOGIN_WINDOW_SECONDS:300}
+    register:
+      max-attempts: ${AUTH_REGISTER_RATE_LIMIT:3}
+      window-seconds: ${AUTH_REGISTER_WINDOW_SECONDS:3600}
+
+cors:
+  allowed-origins: ${CORS_ALLOWED_ORIGINS:}
 
 server:
   port: 8081
@@ -63,10 +75,12 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info,metrics,prometheus
+        include: health,info
   endpoint:
     health:
-      show-details: always
+      show-details: never
+    info:
+      enabled: true
 
 springdoc:
   swagger-ui:

@@ -130,6 +130,11 @@ jobs:
     outputs:
       version: ${{ steps.meta.outputs.version }}
 
+    # NOTE: detekt and OWASP dependency-check jobs were removed because the
+    # corresponding Gradle plugins are not configured in build.gradle.kts.
+    # Re-add them once `detekt` and `org.owasp.dependencycheck` plugins are
+    # configured and pass locally.
+
     steps:
       - uses: actions/checkout@v4
 
@@ -177,45 +182,7 @@ jobs:
           cache-to:   type=gha,mode=max
 
   # ──────────────────────────────────────────
-  # JOB 4 — Security scanning
-  # ──────────────────────────────────────────
-  security-scan:
-    name: Security scan
-    needs: [test-backend]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up JDK 21
-        uses: actions/setup-java@v4
-        with:
-          java-version: '21'
-          distribution: 'temurin'
-
-      - name: Run dependency scan
-        run: ./gradlew --no-daemon dependencyCheckReport
-
-  # ──────────────────────────────────────────
-  # JOB 5 — Lint
-  # ──────────────────────────────────────────
-  lint:
-    name: Code lint
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up JDK 21
-        uses: actions/setup-java@v4
-        with:
-          java-version: '21'
-          distribution: 'temurin'
-
-      - name: Run detekt (static analysis)
-        working-directory: backend
-        run: ./gradlew detekt --no-daemon
-
-  # ──────────────────────────────────────────
-  # JOB 6 — Deployment (placeholder)
+  # JOB 4 — Deployment (placeholder)
   # ──────────────────────────────────────────
   # This job is disabled until staging/production infrastructure is configured.
   # Uncomment and configure when deployment targets are available.

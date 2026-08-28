@@ -1,91 +1,83 @@
-# Security — ClinIQ Backend
+# ClinIQ Security
 
-## Authentication Flow
+ClinIQ handles highly sensitive healthcare data. This document records the security model, the current controls, and the rules every developer must follow.
 
-### JWT-Based Authentication
-- **Scheme**: Bearer token via `Authorization: Bearer <jwt>` header
-- **Token issuance**: `POST /api/v1/auth/login` with phone+password
-- **Token validation**: Spring Security JwtAuthenticationFilter validates token on each request
-- **Token lifecycle**: 
-  - Access tokens are stateless (signed with HS256 using `JWT_SECRET` from env)
-  - Refresh tokens are stored in Redis blacklist for logout/invalidation
-  - Token rotation: each refresh invalidates the previous token
+## Threat Model
 
-### Password Hashing
-- **Algorithm**: BCrypt with 12 rounds (`BCryptPasswordEncoder(12)`)
-- **Default admin password**: `Admin123!` (hash stored in V3 seed migration)
-- **User passwords**: Never stored in plaintext; always hashed on registration
+- **Tenant escape**: a user of Clinic A accessing Clinic B data.
+- **Privilege escalation**: a clinic user gaining SUPER_ADMIN or another clinic's context.
+- **Client-side payment fraud**: a frontend claiming a payment succeeded.
+- **Credential/token theft**: leaked JWTs, refresh tokens, or passwords.
+- **Data exfiltration**: sensitive patient/clinical data leaked via logs or error responses.
 
-### Role Model
-Roles are defined as a `UserRole` enum with `ROME_` prefix for Spring Security compatibility:
-- `SUPER_ADMIN` — full access across all clinics
-- `CLINIC_ADMIN` — manage own clinic
-- `DOCTOR` — clinical operations within own clinic
-- `RECEPTIONIST` — administrative operations within own clinic
-- `PATIENT` — patient-facing operations (booking, own records)
+## Authentication
 
-The `UserDetailsServiceImpl` maps roles as `ROLE_${u.role.name}`, e.g., `ROLE_SUPER_ADMIN`, `ROLE_DOCTOR`.
+| Control | Implementation |
+|---|---|
+| Password hashing | BCrypt, strength 12 (`BCryptPasswordEncoder(12)`) |
+| Access token | JWT (HS384 via `Keys.hmacShaKeyFor`), 15 min TTL, carries `jti`, `email`, `clinicId`, `role`, `type=access` |
+| Refresh token | JWT, 7 days TTL, stored in Redis keyed by user id, carries unique `jti` |
+| Refresh rotation | Every refresh revokes the old token before issuing a new one; reuse of a revoked token is rejected |
+| Token revocation | Access tokens are blacklisted in Redis (SHA-256 of the token) for their remaining TTL; logout revokes refresh + blacklists access |
+| Login failures | `BadCredentialsException` → generic `401` (no user enumeration) |
+| Deactivated users | Blocked at login and on refresh |
 
 ## Authorization (RBAC)
 
-### Clinic Isolation
-- **Mechanism**: `ClinicIsolationFilter` checks `X-Clinic-ID` header against JWT `clinicId`
-- **Enforcement**: All database queries are scoped by `clinicId` via repository methods (`findByIdAndClinicId`, `findByClinicIdAnd...`)
-- **Cross-clinic access**: Returns 403 Forbidden for non-SUPER_ADMIN users
+- `@EnableMethodSecurity` + `@PreAuthorize("hasAnyRole(...)")` on every controller method.
+- Roles: `SUPER_ADMIN`, `CLINIC_ADMIN`, `DOCTOR`, `NURSE`, `RECEPTIONIST`, `FINANCE`, `LAB_TECHNICIAN`, `PHARMACIST`, `PATIENT`.
+- The JWT is the only trusted identity input; `@AuthenticationPrincipal` binds the parsed token (never a client-supplied identity).
 
-### Endpoint-Level Permissions
-| Endpoint | Required Role |
-|----------|-------------|
-| `/api/v1/auth/**` | permitAll |
-| `/api/v1/public/**` | permitAll |
-| `/api/v1/patients` | CLINIC_ADMIN, RECEPTIONIST, SUPER_ADMIN |
-| `/api/v1/appointments` | CLINIC_ADMIN, DOCTOR, SUPER_ADMIN |
-| `/api/v1/consultations` | DOCTOR, SUPER_ADMIN |
-| `/api/v1/pharmacy` | CLINIC_ADMIN, DOCTOR, SUPER_ADMIN |
-| `/api/v1/lab` | CLINIC_ADMIN, DOCTOR, SUPER_ADMIN |
-| `/api/v1/billing` | CLINIC_ADMIN, RECEPTIONIST, FINANCE, SUPER_ADMIN |
-| `/api/v1/admin/**` | SUPER_ADMIN |
+## Multi-tenancy isolation
 
-### Security Headers (implemented)
-All responses include the following headers set via Spring Security DSL:
-- `Content-Security-Policy`: `default-src 'self'`
-- `Strict-Transport-Security`: max-age=31536000, includeSubDomains
-- `X-Content-Type-Options`: `nosniff`
-- `X-Frame-Options`: `DENY` (prevents clickjacking)
-- `Referrer-Policy`: `default`
+- Tenant context is derived **only** from the `clinicId` claim in the signed JWT.
+- `X-Clinic-ID` header is advisory: for non-SUPER_ADMIN it must match the JWT's clinic or the request is rejected (`403`). It can never grant access to another clinic.
+- Every repository query filters by `clinicId`; cross-clinic lookups return `404`.
+- `SUPER_ADMIN` is the only cross-clinic role, and must still select a clinic explicitly.
 
-## Sensitive Configuration
+## Web & transport
 
-All sensitive values come from environment variables (no hardcoded secrets):
+| Control | Status |
+|---|---|
+| CSRF | Disabled — stateless JWT API; no cookies used for auth |
+| CORS | Explicit `CorsConfigurationSource`; only `app.frontend-url`, `http://localhost:*`, `https://*.cliniq.app` |
+| Security headers | CSP (`default-src 'self'`), HSTS (1y, includeSubdomains), X-Frame-Options sameOrigin, Referrer-Policy, X-Content-Type-Options |
+| Session | Stateless (`SessionCreationPolicy.STATELESS`) |
+| Rate limiting | **Not yet implemented** — add before public login/register exposure |
 
-| Variable | Purpose | Placeholder |
-|----------|---------|-------------|
-| `JWT_SECRET` | JWT signing key | `${JWT_SECRET:...}` |
-| `DATABASE_PASSWORD` | PostgreSQL password | `${DB_PASSWORD:...}` |
-| `REDIS_PASSWORD` | Redis password | `${REDIS_PASSWORD:...}` |
-| `AT_API_KEY` | Africa's Talking API key | `${AT_API_KEY:--}` |
-| `MPESA_SANDBOX` | M-Pesa sandbox flag | `${MPESA_SANDBOX:true}` |
+## Secrets & configuration
 
-### Never committed to repository
-The `.env` file (if used locally) must be listed in `.gitignore`. The Docker Compose configuration uses `${VAR:-default}` syntax for safe defaults.
+- All secrets come from environment variables (`application.yml` uses `${VAR:default}`).
+- **Startup fails** in the `prod` profile if `JWT_SECRET` is a known default value.
+- `.env` is gitignored; `.env.example` is the template.
+- Dev-only secrets live in `application-dev.yml` (never in a prod profile).
 
-## Security Considerations
+## Error handling & logging
 
-### SQL Injection
-- All JPA/repository queries use parameterized queries
-- No raw SQL concatenation in repository methods (verified in code review)
+- `GlobalExceptionHandler` returns a consistent `ApiError` — no stack traces, no SQL, no internal details.
+- Validation errors return a field → message map under `error.details`.
+- `RequestIdFilter` adds `X-Request-Id` and an MDC `requestId` to every log line for correlation.
+- **Never log**: passwords, JWTs, refresh tokens, full medical records, or patient clinical details. Audit entries store only structured metadata (entity ids, action, changed-field maps).
 
-### XSS Prevention
-- Output is escaped in Thymeleaf/Templates (if used)
-- JSON responses do not directly inject user-controlled data without validation
+## Payment security
 
-### CSRF Protection
-- Disabled for stateless JWT API (`http.csrf { it.disable() }`)
-- State maintained via JWT token in `Authorization` header
+- The frontend can **never** mark a payment as paid.
+- Manual payments are recorded server-side with amount/balance validation (overpayment rejected).
+- M-Pesa success is only accepted from the webhook with `ResultCode == 0`.
+- Webhook endpoints are public but must be treated as untrusted input and validated; future providers must follow the same server-verified, idempotent pattern.
 
-### Rate Limiting
-- Not yet implemented; consider adding Spring Gateway/Zuul rate limiting for production
+## Operational rules (must never regress)
 
-### Dependency Security
-- GitHub Actions job `security-scan` runs `./gradlew dependencyCheckReport` to detect known vulnerabilities
-- See `.github/workflows/ci-cd.yml`
+1. Never trust `X-Clinic-ID` as authorization — it is a validated selector only.
+2. Never return JPA entities from controllers; always map to DTOs.
+3. Never log tokens, passwords, or PHI.
+4. Never add a `permitAll` path without review (the only public paths are `/api/v1/auth/{login,register,refresh}`, `/api/v1/public/**`, `/api/v1/billing/mpesa/callback`, actuator health/info, swagger).
+5. Add a new Flyway migration (`Vn`) for schema changes; never edit an applied migration in production.
+6. Keep the JWT/clinic filters inside the security chain (not as standalone servlet-filter beans).
+
+## Known gaps (tracked)
+
+- Rate limiting on `/auth/login` and `/auth/register` (design hook exists; not implemented).
+- Webhook origin validation for M-Pesa (currently trusts the callback contract; add signature/origin checks before production).
+- Object-level authorization tests for every domain (cross-clinic tests exist for patients and invoices).
+- `application-prod.yml` — production relies on env vars only (documented in README).

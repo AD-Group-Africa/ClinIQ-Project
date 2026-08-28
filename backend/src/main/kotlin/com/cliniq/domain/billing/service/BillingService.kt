@@ -149,11 +149,27 @@ class BillingService(
         }
 
         val invoice = invoiceRepository.findById(invoiceId).orElse(null) ?: run {
-            log.error("M-Pesa callback: invoice {} not found", invoiceId)
+            log.warn("M-Pesa callback: invoice {} not found", invoiceId)
             return
         }
 
-        val paidAmount = amount ?: return
+        val paidAmount = amount ?: run {
+            log.warn("M-Pesa callback missing amount for invoice {}", invoiceId)
+            return
+        }
+
+        // Idempotency: reject duplicate receipt
+        if (!txRef.isNullOrBlank() && paymentRepository.existsByReference(txRef)) {
+            log.info("M-Pesa callback duplicate receipt {} for invoice {} - ignoring", txRef, invoiceId)
+            return
+        }
+
+        // Overpayment / already-paid guard
+        if (invoice.status == InvoiceStatus.PAID) {
+            log.info("M-Pesa callback for already-PAID invoice {} - ignoring duplicate", invoiceId)
+            return
+        }
+
         val payment = paymentRepository.save(
             Payment(
                 clinicId = invoice.clinicId,
@@ -167,11 +183,13 @@ class BillingService(
         )
 
         invoice.paidAmount = invoice.paidAmount.add(paidAmount)
+        // Cap at total to avoid overpayment drift
+        if (invoice.paidAmount > invoice.total) invoice.paidAmount = invoice.total
         invoice.status = if (invoice.paidAmount >= invoice.total) InvoiceStatus.PAID else InvoiceStatus.PARTIAL
         invoice.updatedAt = Instant.now()
         invoiceRepository.save(invoice)
 
-        log.info("M-Pesa payment recorded: KES {} for invoice {} ({})", paidAmount, invoice.invoiceNumber, txRef)
+        log.info("M-Pesa payment recorded: KES {} for invoice {} receipt {}", paidAmount, invoice.invoiceNumber, txRef)
     }
 
     @Transactional(readOnly = true)

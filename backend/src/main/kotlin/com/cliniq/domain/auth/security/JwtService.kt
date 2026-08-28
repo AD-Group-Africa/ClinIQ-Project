@@ -9,6 +9,7 @@ import io.jsonwebtoken.security.Keys
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.data.redis.core.StringRedisTemplate
 import org.springframework.stereotype.Service
+import java.security.MessageDigest
 import java.util.Date
 import java.util.UUID
 import java.util.concurrent.TimeUnit
@@ -33,6 +34,7 @@ class JwtService(
     fun generateAccessToken(userId: UUID, email: String, clinicId: UUID?, role: UserRole): String =
         Jwts.builder()
             .subject(userId.toString())
+            .claim("jti", UUID.randomUUID().toString())
             .claim("email", email)
             .claim("clinicId", clinicId?.toString())
             .claim("role", role.name)
@@ -45,6 +47,7 @@ class JwtService(
     fun generateRefreshToken(userId: UUID): String {
         val token = Jwts.builder()
             .subject(userId.toString())
+            .claim("jti", UUID.randomUUID().toString())
             .claim("type", "refresh")
             .issuedAt(Date())
             .expiration(Date(System.currentTimeMillis() + refreshExpMs))
@@ -80,5 +83,9 @@ class JwtService(
     fun isAccess(c: Claims): Boolean  = c["type"] == "access"
     fun isRefresh(c: Claims): Boolean = c["type"] == "refresh"
 
-    private fun tokenHash(token: String): Int = token.hashCode()
+    private fun tokenHash(token: String): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        val bytes = digest.digest(token.toByteArray(Charsets.UTF_8))
+        return bytes.joinToString("") { "%02x".format(it) }
+    }
 }

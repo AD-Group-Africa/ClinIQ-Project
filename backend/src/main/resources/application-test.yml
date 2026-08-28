@@ -5,3 +5,11 @@ spring:
     show-sql: false
   cache:
     type: simple
+
+app:
+  auth-rate-limit:
+    enabled: false
+mpesa:
+  callback-secret: test-callback-secret-32chars-min
+cors:
+  allowed-origins: http://localhost:3000,http://localhost:3001

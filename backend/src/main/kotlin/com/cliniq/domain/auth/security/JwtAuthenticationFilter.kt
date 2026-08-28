@@ -5,10 +5,16 @@ import jakarta.servlet.FilterChain
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
 import org.springframework.security.core.context.SecurityContextHolder
-import org.springframework.stereotype.Component
 import org.springframework.web.filter.OncePerRequestFilter
 
-@Component
+/**
+ * Parses the Bearer token and populates the SecurityContext.
+ *
+ * Not a Spring bean on purpose: it is constructed inside the security filter
+ * chain (see SecurityConfig) so Spring Boot never auto-registers it as a
+ * servlet filter. A servlet-level copy would run before the security chain
+ * and have its authentication cleared by SecurityContextHolderFilter.
+ */
 class JwtAuthenticationFilter(private val jwt: JwtService) : OncePerRequestFilter() {
 
     override fun doFilterInternal(req: HttpServletRequest, res: HttpServletResponse, chain: FilterChain) {
@@ -51,7 +57,12 @@ class JwtAuthenticationFilter(private val jwt: JwtService) : OncePerRequestFilte
 
     override fun shouldNotFilter(request: HttpServletRequest): Boolean {
         val path = request.requestURI
-        return path.startsWith("/api/v1/auth/") ||
+        // Only the truly public auth endpoints are skipped. Authenticated auth
+        // endpoints (/me, /logout, /password) still need the JWT parsed so the
+        // @AuthenticationPrincipal principal is available.
+        return path.startsWith("/api/v1/auth/login") ||
+               path.startsWith("/api/v1/auth/register") ||
+               path.startsWith("/api/v1/auth/refresh") ||
                path.startsWith("/api/v1/public/") ||
                path.startsWith("/actuator") ||
                path.startsWith("/swagger") ||
