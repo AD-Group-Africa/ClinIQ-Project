@@ -1,10 +1,12 @@
 # ClinIQ Backend — Database Inventory
 
-**Flyway Version**: V1__initial_schema.sql (1 migration applied)
+**Flyway Version**: V1, V2, V3 (3 migrations applied)
 **Database**: PostgreSQL 16.14
 **Schema**: `public`
 
-## Tables (23 created)
+> This inventory was generated from `V1__initial_schema.sql` and verified against the current entity code. `V2__add_booked_by_to_appointments.sql` adds `booked_by`, `booked_via`, `cancellation_reason`, `chief_complaint`, `reminder_sent` to `appointments`. `V3__seed_data.sql` inserts demo data (clinic, super-admin, doctor, sample patient, sample appointment).
+
+## Tables (22 created by V1)
 
 ### 1. clinics
 | Column | Type | Constraints |

@@ -1,138 +1,83 @@
-# ClinIQ Backend — API Inventory
+# ClinIQ Backend — API Inventory (v1)
 
 **Version**: v1
-**Base Tag**: `pre-audit`
-**Total Endpoints**: ~65 across all controllers
+**Base path**: `/api/v1/`
+**Response wrapper**: `ApiResponse<T>` with `success`, `data`, `meta`, `errors`
+**Error wrapper**: `ApiError` with `code`, `message`, `timestamp`, `path`, `details`
+**Status codes**: 200, 201, 400, 401, 403, 404, 409, 422, 500
+**Pagination**: Spring `Pageable` (`?page=0&size=20&sort=field,asc|desc`)
+**Auth**: Bearer JWT in `Authorization` header
 
-## API Conventions
+---
 
-- **Base path**: `/api/v1/`
-- **Response format**: `ApiResponse<T>` wrapper with `data`, `meta`, `errors`
-- **Error format**: Standardized `ApiError` with `code`, `message`, `timestamp`, `path`, `details`
-- **Status codes**: 200 (OK), 201 (Created), 400 (Bad Request), 401 (Unauthorized), 403 (Forbidden), 404 (Not Found), 422 (Validation Error), 500 (Internal Error)
+## Auth (`/api/v1/auth`)
 
-## Controller Endpoints
+| Method | Path | Description | Auth | Controller |
+|---|---|---|---|---|
+| POST | `/register` | Register clinic + first admin | Public | `AuthController` |
+| POST | `/login` | Login, get access + refresh tokens | Public | `AuthController` |
+| POST | `/refresh` | Refresh access token (rotates refresh) | Public | `AuthController` |
+| POST | `/logout` | Blacklist current access token, revoke refresh | User | `AuthController` |
+| POST | `/staff` | Register staff user | CLINIC_ADMIN, SUPER_ADMIN | `AuthController` |
+| PATCH | `/password` | Change own password | User | `AuthController` |
+| GET | `/me` | Current user profile | User | `AuthController` |
 
-### Auth (`/api/v1/auth`)
-
-| Method | Path | Description | Auth |
-|--------|------|-------------|------|
-| POST | `/register` | Register new user | Public |
-| POST | `/login` | Login & get JWT | Public |
-| POST | `/refresh` | Refresh JWT token | Public |
-| POST | `/logout` | Logout, blacklist token | User |
-| GET | `/me` | Get current user profile | User |
-
-### Patient (`/api/v1/patients`)
-
-| Method | Path | Description | Auth |
-|--------|------|-------------|------|
-| POST | `/` | Create patient | Patient/Doctor/Receptionist |
-| GET | `/` | List patients — with pagination, sorting, filtering | Patient/Doctor/Receptionist |
-| GET | `/{id}` | Get patient by ID | Patient (own clinic), Doctor (own clinic) |
-| PUT | `/{id}` | Update patient | Patient (own clinic), Doctor (own clinic) |
-
-### Appointment (`/api/v1/appointments`)
+## Patient (`/api/v1/patients`)
 
 | Method | Path | Description | Auth |
-|--------|------|-------------|------|
-| POST | `/` | Create appointment | Doctor/Receptionist |
-| GET | `/` | List appointments — with pagination, sorting, filtering by clinic/patient/date | Patient (own), Doctor (own clinic), Receptionist |
-| GET | `/{id}` | Get appointment by ID | Patient (own clinic), Doctor (own clinic) |
-| PUT | `/{id}` | Update appointment status | Doctor/Receptionist |
-| PUT | `/{id}/cancel` | Cancel appointment | Doctor/Receptionist |
-| GET | `/doctor/{doctorId}/schedule` | Get doctor schedule | Doctor (own clinic) |
+|---|---|---|---|
+| POST | `/` | Create patient | RECEPTIONIST, NURSE, CLINIC_ADMIN, DOCTOR, SUPER_ADMIN |
+| GET | `/` | Search + list (paginated, `?q=`) | RECEPTIONIST, NURSE, CLINIC_ADMIN, DOCTOR, FINANCE, SUPER_ADMIN |
+| GET | `/{id}` | Get by ID | RECEPTIONIST, NURSE, CLINIC_ADMIN, DOCTOR, FINANCE, SUPER_ADMIN |
+| PATCH | `/{id}` | Update patient | RECEPTIONIST, NURSE, CLINIC_ADMIN, DOCTOR, SUPER_ADMIN |
 
-### Billing (`/api/v1/billing`)
+## Appointment (`/api/v1/appointments`)
 
 | Method | Path | Description | Auth |
-|--------|------|-------------|------|
-| POST | `/invoices` | Create invoice | Staff |
-| GET | `/invoices/{id}` | Get invoice by ID | Patient (own clinic), Staff |
-| ❌ **GET /invoices** | **List invoices** | **MISSING** | **Staff** |
-| POST | `/payments` | Record payment | Staff |
-| POST | `/mpesa/initiate` | Initiate M-Pesa STK push | Staff |
-| POST | `/mpesa/callback` | Handle M-Pesa webhook | N/A (webhook) |
-| GET | `/reports/revenue` | Revenue report | Admin |
+|---|---|---|---|
+| POST | `/` | Create appointment | (to be re-verified) |
+| GET | `/` | List appointments (paginated, filterable) | (to be re-verified) |
+| GET | `/{id}` | Get by ID | (to be re-verified) |
+| PATCH | `/{id}` | Update | (to be re-verified) |
+| PATCH | `/{id}/cancel` | Cancel | (to be re-verified) |
+| GET | `/doctor/{doctorId}/schedule` | Doctor schedule | (to be re-verified) |
 
-**⚠️ MISSING ENDPOINT**: `GET /api/v1/billing/invoices` — needed for clinic invoice listing
+## Billing (`/api/v1/billing`)
 
-### Lab (`/api/v1/lab`)
+| Method | Path | Description | Auth | Controller |
+|---|---|---|---|---|
+| POST | `/invoices` | Create invoice | CLINIC_ADMIN, RECEPTIONIST, FINANCE, SUPER_ADMIN | `BillingController` |
+| GET | `/invoices` | **List invoices (paginated, clinic-scoped)** | CLINIC_ADMIN, RECEPTIONIST, FINANCE, SUPER_ADMIN | `BillingController:140` |
+| GET | `/invoices/{id}` | Get by ID | CLINIC_ADMIN, RECEPTIONIST, FINANCE, SUPER_ADMIN | `BillingController:57` |
+| POST | `/payments` | Record payment (CASH, CARD, BANK_TRANSFER, INSURANCE, ONLINE) | CLINIC_ADMIN, RECEPTIONIST, FINANCE, SUPER_ADMIN | `BillingController:74` |
+| POST | `/mpesa/initiate` | Initiate M-Pesa STK push | CLINIC_ADMIN, RECEPTIONIST, FINANCE, SUPER_ADMIN | `BillingController:91` |
+| POST | `/mpesa/callback` | M-Pesa webhook | Webhook (validated by M-Pesa origin) | `BillingController:106` |
+| GET | `/reports/revenue` | Monthly revenue report | CLINIC_ADMIN, FINANCE, SUPER_ADMIN | `BillingController:158` |
 
-| Method | Path | Description | Auth |
-|--------|------|-------------|------|
-| POST | `/requests` | Create lab request | Doctor/Receptionist |
-| GET | `/` | List lab requests — with pagination, filtering by patient/clinic/status | Patient (own), Doctor (own clinic), Receptionist |
-| GET | `/{id}` | Get lab request by ID | Patient (own clinic), Doctor (own clinic) |
-| PUT | `/{id}` | Update lab request status | Doctor/Receptionist |
-| GET | `/results/{requestId}` | Get lab results | Patient (own clinic), Doctor (own clinic) |
+> **Payment-success rule**: The frontend can never mark a payment as successful. Only `recordPayment` (for manual methods) and `handleMpesaCallback` (for M-Pesa, only when `resultCode == 0`) can transition an invoice to `PAID` or `PARTIAL`.
 
-### Pharmacy (`/api/v1/pharmacy`)
+## Lab, Pharmacy, Consultation, CRM
 
-| Method | Path | Description | Auth |
-|--------|------|-------------|------|
-| POST | `/drugs` | Create drug entry | Staff |
-| GET | `/drugs` | List drugs — with pagination, filtering | Staff |
-| GET | `/drugs/{id}` | Get drug by ID | Staff |
-| POST | `/batches` | Create drug batch | Staff |
-| GET | `/batches/{drugId}` | Get batches for drug | Staff |
-| POST | `/dispense` | Dispense medication | Staff |
-| GET | `/inventory/low-stock` | Low stock report | Staff |
+Inventory in these modules follows the same pattern (POST/GET list/GET by id/PATCH). See the relevant controller for exact role requirements.
 
-### Consultation (`/api/v1/consultations`)
-
-| Method | Path | Description | Auth |
-|--------|------|-------------|------|
-| POST | `/` | Create consultation | Doctor |
-| GET | `/{id}` | Get consultation by ID | Patient (own clinic), Doctor (own clinic) |
-| PUT | `/{id}` | Update consultation | Doctor |
-| PUT | `/{id}/complete` | Mark consultation complete | Doctor |
-
-### CRM (`/api/v1/crm`)
-
-| Method | Path | Description | Auth |
-|--------|------|-------------|------|
-| POST | `/campaigns` | Create campaign | Staff |
-| GET | `/campaigns` | List campaigns | Staff |
-| GET | `/campaigns/{id}` | Get campaign by ID | Staff |
-| PUT | `/campaigns/{id}` | Update campaign | Staff |
-
-### Analytics (`/api/v1/analytics`)
-
-| Method | Path | Description | Auth |
-|--------|------|-------------|------|
-| GET | `/` | Analytics overview | Admin |
-| GET | `/patients` | Patient statistics | Admin |
-| GET | `/appointments` | Appointment statistics | Admin |
-| GET | `/revenue` | Revenue trends | Admin |
-
-## Standard Error Response Model
+## Standard error response
 
 ```json
 {
   "code": "PATIENT_NOT_FOUND",
   "message": "Patient could not be found",
-  "timestamp": "2026-08-22T12:00:00.000+00:00",
-  "path": "/api/v1/patients/123e4567-abcd-efgh-ijkl-mno",
+  "timestamp": "2026-08-28T12:00:00.000+00:00",
+  "path": "/api/v1/patients/abc",
   "details": []
 }
 ```
 
-## Pagination Standard (List Endpoints)
+## Pagination
 
-- **Page**: `page=0` (default), `page=N` (requested)
-- **Size**: `size=20` (default), `size=N` (requested)
-- **Sort**: `sort=fieldName` (default), `sort=fieldName,dir` (desc/asc)
-- **Example**: `GET /api/v1/patients?page=0&size=20&sort=firstName,asc&filter=clinic:123`
+- `?page=0` (default 0)
+- `?size=20` (default 20)
+- `?sort=fieldName,asc|desc` (default asc, by `id` if not specified)
 
-## Filtering Standard (List Endpoints)
-
-- **Clinic filter**: `clinic=UUID`
-- **Status filter**: `status=SCHEDULED`
-- **Date range**: `date_from=2026-01-01&date_to=2026-12-31`
-- **Example**: `GET /api/v1/appointments?clinic=123&status=SCHEDULED&date_from=2026-01-01`
-
-## Sorting Standard (List Endpoints)
-
-- **Direction**: `asc` or `desc` (default `asc`)
-- **Example**: `GET /api/v1/patients?sort=lastName,desc`
+## See also
+- Swagger UI: `http://localhost:8080/swagger-ui.html` (when running with `dev` profile)
+- OpenAPI JSON: `http://localhost:8080/v3/api-docs`
