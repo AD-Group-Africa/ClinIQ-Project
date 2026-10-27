@@ -27,3 +27,8 @@ Thumbs.db
 
 # Repomix output (if you don't need it)
 repomix-output.xml
+
+# Local debugging and generated files
+backend/cliniq-error.txt
+backend/src/main/resources/db/migration/V1__initial_schema.sql.backup
+frontend/tsconfig.tsbuildinfo

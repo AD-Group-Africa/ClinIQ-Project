@@ -1,8 +1,8 @@
 -- ============================================================
--- V1__initial_schema.sql — Complete ClinIQ database schema
+-- V1__initial_schema.sql â€” Complete ClinIQ database schema
 -- ============================================================
 
--- Enums (as PostgreSQL text types — Hibernate handles)
+-- Enums (as PostgreSQL text types â€” Hibernate handles)
 -- We define them as checks or just use VARCHAR; JPA enums are strings.
 -- No CREATE TYPE needed unless using native enums; for simplicity we use VARCHAR.
 

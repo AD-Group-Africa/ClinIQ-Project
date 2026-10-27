@@ -42,19 +42,20 @@ class JwtAuthenticationFilter(private val jwt: JwtService) : OncePerRequestFilte
         }
         chain.doFilter(req, res)
     }
-
     private fun deny(res: HttpServletResponse, message: String) {
         res.status = 401
         res.contentType = "application/json"
         res.writer.write("""{"success":false,"error":{"code":"UNAUTHORIZED","message":"$message"}}""")
     }
+override fun shouldNotFilter(request: HttpServletRequest): Boolean {
+    val path = request.requestURI
+    return path == "/api/v1/auth/login" ||
+           path == "/api/v1/auth/register" ||
+           path == "/api/v1/auth/refresh" ||
+           path.startsWith("/api/v1/public/") ||
+           path.startsWith("/actuator") ||
+           path.startsWith("/swagger") ||
+           path.startsWith("/v3/api-docs")
+}
 
-    override fun shouldNotFilter(request: HttpServletRequest): Boolean {
-        val path = request.requestURI
-        return path.startsWith("/api/v1/auth/") ||
-               path.startsWith("/api/v1/public/") ||
-               path.startsWith("/actuator") ||
-               path.startsWith("/swagger") ||
-               path.startsWith("/v3/api-docs")
-    }
 }

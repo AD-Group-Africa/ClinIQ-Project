@@ -1,3 +1,4 @@
+
 package com.cliniq.config
 
 import com.cliniq.domain.auth.security.JwtAuthenticationFilter
@@ -25,37 +26,56 @@ class SecurityConfig(
     private val clinicIsolationFilter: ClinicIsolationFilter,
     private val userDetailsService: UserDetailsService
 ) {
-    @Bean
-    fun securityFilterChain(http: HttpSecurity): SecurityFilterChain = http
-        .csrf { it.disable() }
-        .cors { }
-        .sessionManagement { it.sessionCreationPolicy(SessionCreationPolicy.STATELESS) }
-        .authorizeHttpRequests { auth ->
-            auth.requestMatchers(
-                "/api/v1/auth/**",
-                "/api/v1/public/**",
-                "/actuator/health",
-                "/v3/api-docs/**",
-                "/swagger-ui/**",
-                "/swagger-ui.html"
-            ).permitAll()
-            .anyRequest().authenticated()
-        }
-        .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter::class.java)
-        .addFilterAfter(clinicIsolationFilter, JwtAuthenticationFilter::class.java)
-        .build()
 
     @Bean
-    fun passwordEncoder(): PasswordEncoder = BCryptPasswordEncoder(12)
+    fun securityFilterChain(http: HttpSecurity): SecurityFilterChain {
+        http
+            .csrf { it.disable() }
+            .cors { }
+            .sessionManagement {
+                it.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
+            }
+            .authorizeHttpRequests { auth ->
+                auth.requestMatchers(
+                    "/api/v1/auth/login",
+                    "/api/v1/auth/register",
+                    "/api/v1/auth/refresh",
+                    "/api/v1/public/**",
+                    "/actuator/health",
+                    "/v3/api-docs/**",
+                    "/swagger-ui/**",
+                    "/swagger-ui.html"
+                ).permitAll()
+                    .requestMatchers("/api/v1/auth/**").authenticated()
+                    .anyRequest().authenticated()
+            }
+            .addFilterBefore(
+                jwtAuthFilter,
+                UsernamePasswordAuthenticationFilter::class.java
+            )
+            .addFilterAfter(
+                clinicIsolationFilter,
+                JwtAuthenticationFilter::class.java
+            )
+
+        return http.build()
+    }
 
     @Bean
-    fun authenticationManager(config: AuthenticationConfiguration): AuthenticationManager =
+    fun passwordEncoder(): PasswordEncoder =
+        BCryptPasswordEncoder(12)
+
+    @Bean
+    fun authenticationManager(
+        config: AuthenticationConfiguration
+    ): AuthenticationManager =
         config.authenticationManager
 
     @Bean
-    fun authenticationProvider(): DaoAuthenticationProvider =
-        DaoAuthenticationProvider().apply {
-            setUserDetailsService(userDetailsService)
-            setPasswordEncoder(passwordEncoder())
-        }
+    fun authenticationProvider(): DaoAuthenticationProvider {
+        val provider = DaoAuthenticationProvider()
+        provider.setUserDetailsService(userDetailsService)
+        provider.setPasswordEncoder(passwordEncoder())
+        return provider
+    }
 }

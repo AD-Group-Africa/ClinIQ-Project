@@ -9,6 +9,7 @@ import jakarta.validation.Valid
 import org.springframework.http.ResponseEntity
 import org.springframework.security.access.prepost.PreAuthorize
 import org.springframework.security.core.annotation.AuthenticationPrincipal
+import org.springframework.security.core.annotation.CurrentSecurityContext
 import org.springframework.web.bind.annotation.*
 
 @RestController
@@ -27,7 +28,7 @@ class AuthController(private val authService: AuthService) {
     @PreAuthorize("hasAnyRole('CLINIC_ADMIN','SUPER_ADMIN')")
     fun registerStaff(
         @Valid @RequestBody req: RegisterStaffRequest,
-        @AuthenticationPrincipal auth: JwtAuthenticationToken
+       @CurrentSecurityContext(expression = "authentication") auth: JwtAuthenticationToken
     ) = ResponseEntity.status(201).body(
         ApiResponse.success(authService.registerStaff(req, auth.clinicId!!, auth.userId))
     )
@@ -38,7 +39,7 @@ class AuthController(private val authService: AuthService) {
 
     @PostMapping("/logout")
     fun logout(
-        @AuthenticationPrincipal auth: JwtAuthenticationToken,
+       @CurrentSecurityContext(expression = "authentication") auth: JwtAuthenticationToken,
         http: HttpServletRequest
     ): ResponseEntity<ApiResponse<Unit>> {
         val token = http.getHeader("Authorization")?.removePrefix("Bearer ")?.trim()
@@ -49,13 +50,13 @@ class AuthController(private val authService: AuthService) {
     @PatchMapping("/password")
     fun changePassword(
         @Valid @RequestBody req: ChangePasswordRequest,
-        @AuthenticationPrincipal auth: JwtAuthenticationToken
+       @CurrentSecurityContext(expression = "authentication") auth: JwtAuthenticationToken
     ): ResponseEntity<ApiResponse<Unit>> {
         authService.changePassword(auth.userId, req)
         return ResponseEntity.ok(ApiResponse.success(Unit))
     }
 
     @GetMapping("/me")
-    fun me(@AuthenticationPrincipal auth: JwtAuthenticationToken) =
+    fun me(@CurrentSecurityContext(expression = "authentication") auth: JwtAuthenticationToken) =
         ResponseEntity.ok(ApiResponse.success(authService.me(auth.userId)))
 }

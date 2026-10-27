@@ -1,0 +1,135 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* =====================================================================================
+   CLINIQ DESIGN TOKENS  (single source of truth — do not scatter raw hex in components)
+
+   Source: the Canva reception mockup's exported CSS. Values are marked:
+     [canva]      exact value from the Canva export
+     [adjusted]   Canva value darkened/changed so it passes WCAG 2.2 AA (reason given)
+     [approx]     NOT present in the Canva design; chosen to sit alongside it
+   ===================================================================================== */
+:root {
+  /* Surfaces */
+  --color-background: #edf6f8;      /* [canva] page background (.app-shell) */
+  --color-surface: #ffffff;         /* [canva] cards */
+  --color-surface-muted: #f2f9fb;   /* [canva] table header background */
+
+  /* Text */
+  --color-text-primary: #071c31;    /* [canva] --ink, 17.2:1 on white */
+  --color-text-secondary: #587084;  /* [canva] --muted, 4.7:1 on the page background */
+
+  /* Brand */
+  --color-brand: #12bfe8;           /* [canva] --sky. Fills only: white text on it is 2.2:1, so use navy text */
+  --color-brand-dark: #06708f;      /* [adjusted] Canva used #0785a9 for small teal text (3.9:1 on the page bg, fails AA); this is 5.1:1 */
+  --color-brand-light: #e5f8fa;     /* [canva] icon tiles / chip background (three near-identical tints merged) */
+  --color-accent: #78e6ed;          /* [canva] --aqua, highlights on navy */
+
+  /* Navy surfaces (sidebar, topbar, toast) */
+  --color-navy: #08233d;            /* [canva] --navy */
+  --color-navy-soft: #0c3151;       /* [canva] --navy-2 */
+  --color-navy-line: rgba(120, 230, 237, 0.16); /* [canva] sidebar right border */
+  --color-on-navy: #d8eaf4;         /* [canva] sidebar text */
+  --color-on-navy-muted: #acc7d7;   /* [canva] nav item text, 9.0:1 on navy */
+  --color-nav-hover: rgba(120, 230, 237, 0.09); /* [canva] nav hover background */
+
+  /* Borders */
+  --color-border: #d9e8ee;          /* [canva] --line, card and divider borders */
+  --color-border-subtle: #e4eef2;   /* [canva] table row dividers */
+  --color-border-input: #6b8595;    /* [adjusted] Canva input border #c8dce5 is 1.4:1 against white; WCAG 1.4.11 needs 3:1. This is 3.9:1 */
+
+  /* Focus */
+  --color-focus: #06708f;           /* [adjusted] Canva focus is a 17%-opacity halo (2.2:1); a solid 5.6:1 outline replaces it, the halo is kept as decoration */
+
+  /* Overlays */
+  --color-overlay: rgba(3, 26, 45, 0.55); /* [approx] dialog backdrop, based on the Canva drawer shadow colour */
+
+  /* Status — each is a text colour + soft background pair, all >= 4.5:1 */
+  --color-info: #06708f;            /* [adjusted] from Canva #087e9d (4.3:1) */
+  --color-info-soft: #e5f8fa;       /* [canva] */
+  --color-success: #0b6b4a;         /* [approx] no green in the Canva design */
+  --color-success-soft: #e3f6ee;    /* [approx] */
+  --color-warning: #8a5100;         /* [approx] no amber in the Canva design */
+  --color-warning-soft: #fdf0d8;    /* [approx] */
+  --color-danger: #b34829;          /* [canva] error text colour, 5.4:1 on white */
+  --color-danger-soft: #fbeae4;     /* [approx] */
+  --color-danger-on-dark: #ff9b85;  /* [approx] error icon on navy toasts */
+  --color-neutral: #3d566a;         /* [approx] */
+  --color-neutral-soft: #e6eef2;    /* [approx] */
+
+  /* Radii */
+  --radius-mark: 14px;              /* [canva] brand tile */
+  --radius-control: 12px;           /* [canva] buttons, inputs, nav items */
+  --radius-tile: 18px;              /* [canva] metric cards */
+  --radius-card: 20px;              /* [canva] content cards */
+
+  /* Shadows and gradients */
+  --shadow-card: 0 10px 30px rgba(16, 62, 87, 0.05);    /* [canva] */
+  --shadow-lift: 0 10px 22px rgba(0, 120, 155, 0.22);   /* [canva] button hover */
+  --shadow-drawer: 20px 0 40px rgba(3, 26, 45, 0.22);   /* [canva] mobile sidebar */
+  --shadow-toast: 0 20px 25px -5px rgba(0, 0, 0, 0.25); /* [canva] Tailwind shadow-xl, used by the Canva toast */
+  --shadow-halo: 0 0 0 4px rgba(18, 191, 232, 0.17);    /* [canva] input focus halo (decorative only) */
+  --gradient-nav-active: linear-gradient(90deg, rgba(37, 197, 229, 0.24), rgba(37, 197, 229, 0.08)); /* [canva] */
+  --gradient-topbar-overlay: linear-gradient(90deg, rgba(4, 24, 43, 0.96) 0%, rgba(5, 37, 60, 0.82) 48%, rgba(4, 23, 43, 0.47) 100%); /* [canva] */
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    @apply bg-background font-sans text-ink antialiased;
+    font-weight: 500; /* [approx] Canva sets 600 on <body>; 500 keeps long clinical text readable, 600+ is used for labels and controls */
+  }
+
+  /* One visible, high-contrast focus indicator for every interactive element (WCAG 2.4.7, 2.4.13) */
+  :focus-visible {
+    outline: 2px solid var(--color-focus);
+    outline-offset: 2px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+/* Typography scale.
+   Fonts: Work Sans (declared on the Canva <body>) for UI and body text.
+   Source Serif 4 is loaded by the Canva page but never applied in its exported CSS, so its use for
+   headings is an inference — change --font-source-serif usage in `font-heading` if Canva says otherwise. */
+@layer components {
+  .type-page-title {
+    @apply font-heading text-[1.75rem] font-bold leading-tight tracking-tight text-ink shell:text-[2rem];
+  }
+  .type-section-title {
+    @apply font-heading text-xl font-semibold leading-snug text-ink;
+  }
+  .type-card-title {
+    @apply font-heading text-lg font-semibold leading-snug text-ink;
+  }
+  .type-body {
+    @apply text-sm font-medium leading-relaxed;
+  }
+  .type-label {
+    @apply text-sm font-semibold text-ink;
+  }
+  .type-helper {
+    @apply text-xs font-medium leading-normal text-muted;
+  }
+  .type-eyebrow {
+    /* Canva uses 10px; 11px is the smallest size we allow for readability */
+    @apply text-[0.6875rem] font-extrabold uppercase tracking-[0.16em];
+  }
+  .type-th {
+    @apply text-xs font-bold uppercase tracking-wider text-muted;
+  }
+}
